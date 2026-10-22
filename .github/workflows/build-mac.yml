@@ -1,0 +1,63 @@
+# Baut Crystal Voice (AU + VST3, Universal Binary) auf einem macOS-Server von GitHub.
+# Ergebnis: ZIP unter "Actions" → letzter Lauf → "Artifacts".
+# Bei einem Tag wie v0.1.0 zusätzlich als Download unter "Releases".
+name: Build macOS
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Konfigurieren
+        run: cmake -B build -G Xcode -DCV_BUILD_SIM=OFF
+
+      - name: Bauen
+        run: cmake --build build --config Release --target CrystalVoice_AU CrystalVoice_VST3 -- -quiet
+
+      - name: AU prüfen (auval)
+        run: |
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          auval -v aufx Crv1 Kutz
+
+      - name: Paket schnüren
+        run: |
+          OUT="Crystal Voice"
+          mkdir -p "dist/$OUT"
+          cp -R "build/CrystalVoice_artefacts/Release/AU/Crystal Voice.component" "dist/$OUT/"
+          cp -R "build/CrystalVoice_artefacts/Release/VST3/Crystal Voice.vst3" "dist/$OUT/"
+          cat > "dist/$OUT/INSTALLATION.txt" <<'TXT'
+          CRYSTAL VOICE · STUDIO KAUTZ
+
+          1. "Crystal Voice.component" nach  ~/Library/Audio/Plug-Ins/Components/  kopieren (AU, Logic/MainStage)
+             "Crystal Voice.vst3"      nach  ~/Library/Audio/Plug-Ins/VST3/        kopieren (VST3, Cubase, Ableton, Reaper …)
+             (Im Finder: Gehe zu → Gehe zu Ordner …, Pfad einfügen)
+
+          2. Einmalig im Terminal die Download-Sperre von macOS aufheben:
+             xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"Crystal Voice.component"
+             xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Crystal Voice.vst3"
+
+          3. DAW neu starten. In Logic: Audio-Units → STUDIO KAUTZ → Crystal Voice.
+          TXT
+          sed -i '' 's/^          //' "dist/$OUT/INSTALLATION.txt"
+          cd dist && ditto -c -k --sequesterRsrc --keepParent "$OUT" CrystalVoice-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrystalVoice-macOS
+          path: dist/CrystalVoice-macOS.zip
+
+      - name: Release anlegen (nur bei Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/CrystalVoice-macOS.zip

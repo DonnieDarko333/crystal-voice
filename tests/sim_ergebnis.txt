@@ -1,0 +1,25 @@
+Modell: 22500 Frames x 32 Bänder, Aufbau 0.14 s für 30 s Song
+
+Bypass (0/0): max. Abweichung 0
+Blockgröße 256 vs. zufällig 1..700: max. Abweichung 0
+
+PLAYBACK-ÜBERSPRECHEN (nur Instrumental am Mikro), ab 8 s
+  Instr  25:    5.6 dB weniger   (Echtzeitfaktor 0.044)
+  Instr  50:   15.3 dB weniger   (Echtzeitfaktor 0.041)
+  Instr  75:   20.6 dB weniger   (Echtzeitfaktor 0.070)
+  Instr 100:   24.0 dB weniger   (Echtzeitfaktor 0.069)
+
+RAUMHALL DER STIMME (nur Stimme am Mikro, ab 8 s)
+            Direktschall | Hall gesamt | Hall im Gesang | Hall in Pausen | Direkt/Hall-Gewinn
+  Vocal  25:    -0.3 dB     -0.7 dB       -0.6 dB         -4.4 dB          +0.4 dB
+  Vocal  50:    -0.6 dB     -1.4 dB       -1.3 dB         -9.7 dB          +0.8 dB
+  Vocal  75:    -1.0 dB     -2.1 dB       -2.0 dB        -15.3 dB          +1.2 dB
+  Vocal 100:    -1.3 dB     -2.8 dB       -2.6 dB        -20.9 dB          +1.5 dB
+
+KOMPLETT (Stimme + Halle + Playback): Direktschall zu Störanteil (Hall + Playback)
+  Vocal   0 / Instr   0:    4.8 dB  ( +0.0 dB)
+  Vocal   0 / Instr 100:   10.6 dB  ( +5.9 dB)
+  Vocal 100 / Instr   0:    4.9 dB  ( +0.1 dB)
+  Vocal  50 / Instr  50:   11.2 dB  ( +6.4 dB)
+  Vocal  75 / Instr  75:   11.7 dB  ( +6.9 dB)
+  Vocal 100 / Instr 100:   12.0 dB  ( +7.2 dB)

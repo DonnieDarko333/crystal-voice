@@ -1,0 +1,30 @@
+ 44100 Hz, T60 0.8 s:  gemessen T60 0.79 s, SNR 114 dB, Abweichung IR -27.9 dB, Länge 0.94 s 
+[ OK ]   T60 innerhalb 10 % (44100 Hz, 0.8 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 44100 Hz, T60 1.6 s:  gemessen T60 1.59 s, SNR 114 dB, Abweichung IR -27.9 dB, Länge 1.82 s 
+[ OK ]   T60 innerhalb 10 % (44100 Hz, 1.6 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 44100 Hz, T60 2.6 s:  gemessen T60 2.60 s, SNR 114 dB, Abweichung IR -27.9 dB, Länge 2.84 s 
+[ OK ]   T60 innerhalb 10 % (44100 Hz, 2.6 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 48000 Hz, T60 0.8 s:  gemessen T60 0.80 s, SNR 114 dB, Abweichung IR -27.6 dB, Länge 0.96 s 
+[ OK ]   T60 innerhalb 10 % (48000 Hz, 0.8 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 48000 Hz, T60 1.6 s:  gemessen T60 1.60 s, SNR 114 dB, Abweichung IR -27.6 dB, Länge 1.82 s 
+[ OK ]   T60 innerhalb 10 % (48000 Hz, 1.6 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 48000 Hz, T60 2.6 s:  gemessen T60 2.60 s, SNR 114 dB, Abweichung IR -27.6 dB, Länge 2.88 s 
+[ OK ]   T60 innerhalb 10 % (48000 Hz, 2.6 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 96000 Hz, T60 0.8 s:  gemessen T60 0.80 s, SNR 117 dB, Abweichung IR -26.7 dB, Länge 1.00 s 
+[ OK ]   T60 innerhalb 10 % (96000 Hz, 0.8 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 96000 Hz, T60 1.6 s:  gemessen T60 1.61 s, SNR 117 dB, Abweichung IR -26.7 dB, Länge 1.88 s 
+[ OK ]   T60 innerhalb 10 % (96000 Hz, 1.6 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+ 96000 Hz, T60 2.6 s:  gemessen T60 2.59 s, SNR 117 dB, Abweichung IR -26.7 dB, Länge 2.94 s 
+[ OK ]   T60 innerhalb 10 % (96000 Hz, 2.6 s)
+[ OK ]   IR-Form trifft (Fehler < -20 dB)
+[ OK ] Übersteuerung erkannt und gemeldet
+
+Alle Prüfungen bestanden.
