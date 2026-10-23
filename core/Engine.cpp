@@ -27,6 +27,11 @@ void Engine::prepare(double sampleRate, float aecLengthMs, int bands) {
     leak.assign(nb, 0.3f); gS.assign(nb, 1.0f); gT.assign(nb, 1.0f); tmpB.assign(nb, 1.0f);
     binG.assign(layout.numBins, 1.0f);
 
+    rHop.assign(H, 0.0f); histRef.assign(M, 0.0f); bRef.assign(nb, 0.0f); rexp.assign(nb, 0.0f);
+    ringCap = (int) std::ceil(3.2 * sr / H) + M / H;
+    prefRing.assign((size_t) ringCap * nb, 0.0f);
+    peakDecay = (float) std::exp(-H / (sr * 10.0)); // Spitzenwert der Referenz: 10 s Gedächtnis
+
     hOld.assign(L, 0.0f); hNew.assign(L, 0.0f);
     dl.assign(2 * L, 0.0f);
     cep.init(M);
@@ -54,7 +59,10 @@ void Engine::reset() {
     hopIdx = 0; dlPos = 0;
     logLevel = 0.0f; levelCount = 0;
     divergeCnt = 0; eD = eE = 0.0f; erleDb = 0.0f;
-    startHop(0);
+    std::fill(histRef.begin(), histRef.end(), 0.0f);
+    std::fill(prefRing.begin(), prefRing.end(), 0.0f);
+    ringPos = ringFill = 0; maxP = 0.0f; singHang = 1 << 20; refSeen = false;
+    startHop();
 }
 
 void Engine::setAmounts(float vocal01, float instr01) {
@@ -65,10 +73,6 @@ void Engine::setAmounts(float vocal01, float instr01) {
     gminI = dbToGain(-20.0f * gamma);
     beta = 2.0f * v;
     gminV = dbToGain(-24.0f * v);
-}
-
-void Engine::setSyncMs(float ms) {
-    syncSamples = (long long) std::llround(ms * 0.001 * sr);
 }
 
 float Engine::firOut(float x, float a) {
@@ -101,15 +105,17 @@ float Engine::auxOut(Aux& ax, float x, float a) {
     return yo + a * (yn - yo);
 }
 
-void Engine::process(const float* mic, const float* ref, float* out, int n,
-                     bool isPlaying, long long timelinePos, const VocalModel* m) {
+void Engine::process(const float* mic, const float* instr, const float* vocalRef, float* out, int n,
+                     bool isPlaying, const RoomModel* rm) {
     playing = isPlaying;
-    modelOk = m && m->sampleRate == sr && m->numBands == nb;
-    model = modelOk ? m : nullptr;
+    modelOk = rm && rm->sampleRate == sr && rm->numBands == nb;
+    room = modelOk ? rm : nullptr;
+    refThisBlock = vocalRef != nullptr;
 
     for (int i = 0; i < n; ++i) {
         const float d = mic[i];
-        const float x = ref ? ref[i] : 0.0f;
+        const float x = instr ? instr[i] : 0.0f;
+        rHop[hopIdx] = vocalRef ? vocalRef[i] : 0.0f;
         const float y = predHop[hopIdx];
         const float eF = d - y;
         const float eS = d - wSub * y;
@@ -122,7 +128,7 @@ void Engine::process(const float* mic, const float* ref, float* out, int n,
         if (++hopIdx == H) {
             hopIdx = 0;
             endHop();
-            startHop(timelinePos + i + 1);
+            startHop();
         }
     }
 }
@@ -151,9 +157,11 @@ void Engine::endHop() {
     std::memcpy(histSub.data() + (M - H), subHop.data(), sizeof(float) * H);
     std::memcpy(histFull.data() + (M - H), fullHop.data(), sizeof(float) * H);
     std::memcpy(histPred.data() + (M - H), predHop.data(), sizeof(float) * H);
+    std::memmove(histRef.data(), histRef.data() + H, sizeof(float) * (M - H));
+    std::memcpy(histRef.data() + (M - H), rHop.data(), sizeof(float) * H);
 }
 
-void Engine::startHop(long long pos) {
+void Engine::startHop() {
     aec.predict(predHop.data());
 
     an.analyze(histSub.data(), bOut.data());
@@ -161,22 +169,45 @@ void Engine::startHop(long long pos) {
     if (wSub < 1.0f) an.analyze(histFull.data(), bFull.data());
     else bFull = bOut;
 
-    // --- Referenz-Take / Raum-Modell -------------------------------------------
+    // --- Referenzstimme laufend analysieren, erwarteten Hall bilden -----------------
     vocalOn = false;
-    int t = -1;
-    bool valid = false;
-    if (model && playing) {
-        const long long tt = pos + syncSamples;
-        if (tt >= 0) { t = (int) (tt / H); valid = t < model->numFrames; }
-    }
     const float* R = nullptr;
-    if (valid) {
-        muNext = model->busy[t] == 2 ? 0.0f : (model->busy[t] == 1 ? 0.3f : 1.0f); // Vorgriff
-        if (t > 0 && model->voiced[t - 1]) {
-            const float* pr = model->prefAt(t - 1);
-            const float* rx = model->rexpAt(t - 1);
+    if (refThisBlock && playing) {
+        an.analyze(histRef.data(), bRef.data());
+        ringPos = (ringPos + 1) % ringCap;
+        std::copy(bRef.begin(), bRef.end(), prefRing.begin() + (size_t) ringPos * nb);
+        ringFill = std::min(ringFill + 1, ringCap);
+
+        float pTot = 0.0f;
+        for (int b = 0; b < nb; ++b) pTot += bRef[b];
+        maxP = std::max(maxP * peakDecay, pTot);
+        constexpr float floorE = 1e-7f;
+        const bool voiced = pTot > std::max(maxP * 1e-3f, floorE); // −30 dB unter Spitze
+        const bool sing = pTot > std::max(maxP * 1e-4f, floorE);   // −40 dB
+        singHang = sing ? 0 : singHang + 1;
+        if (sing) refSeen = true;
+
+        // Hallschätzung: Σ_tau K[tau] · Pref[t − tau]
+        float rTot = 0.0f;
+        std::fill(rexp.begin(), rexp.end(), 0.0f);
+        if (room) {
+            const int Lk = std::min(room->length, ringFill);
+            for (int tau = 0; tau < Lk; ++tau) {
+                const float* k = room->at(tau);
+                const float* p = &prefRing[(size_t) ((ringPos - tau + ringCap) % ringCap) * nb];
+                for (int b = 0; b < nb; ++b) rexp[b] += k[b] * p[b];
+            }
+            for (int b = 0; b < nb; ++b) rTot += rexp[b];
+        }
+
+        // Nachführen der Playback-Unterdrückung: einfrieren, solange gesungen wird (+50 ms)
+        const bool singing = (double) singHang * H < 0.05 * sr;
+        muNext = singing ? 0.0f : (rTot > maxP * 1e-2f ? 0.3f : 1.0f);
+
+        // Pegelverhältnis Live-Mikro / Referenz, nur bei deutlichem Gesang
+        if (voiced) {
             double num = 0.0, den = 0.0;
-            for (int b = 0; b < nb; ++b) { num += bFull[b]; den += pr[b] + rx[b]; }
+            for (int b = 0; b < nb; ++b) { num += bFull[b]; den += bRef[b] + rexp[b]; }
             if (num > 1e-20 && den > 1e-20) {
                 const float lr = (float) std::log(num / den);
                 const float c = levelCount < 200 ? 0.05f : (float) (1.0 - std::exp(-H / (sr * 1.5)));
@@ -184,12 +215,12 @@ void Engine::startHop(long long pos) {
                 ++levelCount;
             }
         }
-        if (model->hasRoom && levelCount > 0 && beta > 0.0f) {
+        if (room && levelCount > 0 && beta > 0.0f) {
             vocalOn = true;
-            R = model->rexpAt(t);
+            R = rexp.data();
         }
     } else {
-        muNext = 0.3f; // ohne Modell: vorsichtiger nachführen
+        muNext = 0.3f; // ohne Referenz: vorsichtiger nachführen
     }
 
     // --- Rest-Playback messen (nur ohne Gesang) ---------------------------------

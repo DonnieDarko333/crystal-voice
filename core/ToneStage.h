@@ -57,7 +57,7 @@ private:
 
 class ToneStage {
 public:
-    enum Mic { HeilPR37 = 0, ShureKSM9 = 1, NeumannKMS105 = 2 };
+    enum Mic { Neutral = 0, HeilPR37 = 1, ShureKSM9 = 2, NeumannKMS105 = 3 };
     static constexpr int kStages = 4;
     using Chain = std::array<Biquad, kStages>;
 
@@ -94,6 +94,8 @@ public:
     Chain design(int m, bool pres) const {
         Chain c;
         switch (m) {
+        case Neutral:       // keine Anpassung (Standard)
+            break;
         case HeilPR37:      // dynamisch, oberes Ende ab ~10 kHz fallend (spez. bis 18 kHz)
             c[0] = Biquad::highpass(sr, 50.0, 0.707);       // unter dem Arbeitsbereich: Trittschall
             c[1] = Biquad::highShelf(sr, 9000.0, 2.5);      // Luft ergänzen, die die Membranmasse kostet
@@ -121,7 +123,7 @@ private:
     }
 
     double sr = 48000.0;
-    int mic = HeilPR37;
+    int mic = Neutral;
     bool presence = false;
     Chain cur, nxt;
     bool fading = false;

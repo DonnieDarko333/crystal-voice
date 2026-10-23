@@ -9,6 +9,7 @@
 using namespace gh;
 static const double SR = 48000.0;
 static int gBands = 32;
+static const std::vector<float>* gRef = nullptr; // Referenzstimme, zeitlich ausgerichtet
 
 static std::vector<float> fftConv(const std::vector<float>& a, const std::vector<float>& b) {
     const size_t n = a.size() + b.size() - 1;
@@ -49,7 +50,7 @@ static std::vector<float> makeIr(unsigned seed, int delay, float direct, double 
 struct Phrase { double a, b; };
 
 static std::vector<float> run(const std::vector<float>& mic, const std::vector<float>& ref,
-                              const VocalModel* m, float v, float in, int blockMode, double* secs = nullptr,
+                              const RoomModel* m, float v, float in, int blockMode, double* secs = nullptr,
                               const std::vector<const std::vector<float>*>& auxIn = {},
                               std::vector<std::vector<float>>* auxOut = nullptr) {
     Engine e;
@@ -69,7 +70,7 @@ static std::vector<float> run(const std::vector<float>& mic, const std::vector<f
             for (size_t k = 0; k < auxIn.size(); ++k) { ai[k] = auxIn[k]->data() + pos; ao[k] = (*auxOut)[k].data() + pos; }
             e.setAux(ai, ao, (int) auxIn.size());
         }
-        e.process(&mic[pos], ref.empty() ? nullptr : &ref[pos], &out[pos], n, true, (long long) pos, m);
+        e.process(&mic[pos], ref.empty() ? nullptr : &ref[pos], gRef ? &(*gRef)[pos] : nullptr, &out[pos], n, true, m);
         pos += n;
     }
     if (secs) *secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -175,18 +176,18 @@ int main(int argc, char** argv) {
 
     std::string err;
     auto t0 = std::chrono::steady_clock::now();
-    auto model = VocalModel::build(refTake, SR, irMeas, SR, SR, 5.0f, err, gBands);
+    auto model = RoomModel::build(irMeas, SR, SR, 5.0f, err, gBands);
+    gRef = &refTake;
     const double tBuild = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     if (!model) { std::printf("Modellfehler: %s\n", err.c_str()); return 1; }
-    std::printf("Modell: %d Frames x %d Bänder, Aufbau %.2f s für %.0f s Song\n\n",
-                model->numFrames, model->numBands, tBuild, dur);
+    std::printf("Raummodell: %d Hops x %d Bänder, Aufbau %.3f s\n\n", model->length, model->numBands, tBuild);
 
     const std::vector<float> none;
     if (std::getenv("PROBE")) {
         Engine e; e.prepare(SR, 500.f, gBands); e.setAmounts(1.f, 0.f);
         std::vector<float> o(N);
         for (size_t p = 0; p < N; p += 64) {
-            e.process(&micV[p], nullptr, &o[p], 64, true, (long long) p, model.get());
+            e.process(&micV[p], nullptr, &refTake[p], &o[p], 64, true, model.get());
             const double t = (double) p / SR;
             if (t > 12.0 && t < 15.5 && p % 2400 == 0)
                 std::printf("t=%.2f  gain %6.1f dB  Hall/Signal %6.1f dB  Pegel %5.1f dB\n", t, e.debugMeanGainDb(), e.debugRatioDb(), e.debugLevelDb());

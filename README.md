@@ -2,8 +2,8 @@
 
 AU/VST3-Plugin für den Gesangskanal. Rechnet zwei Störanteile aus dem Mikrofonsignal heraus, und zwar mit Information, die vorab bekannt ist:
 
-1. **Instrumental-Übersprechen** über PA und Monitore. Referenz ist das Playback selbst (Sidechain), sampleexakt. Ein adaptiver Filter lernt den Weg Lautsprecher → Halle → Mikro und zieht die Vorhersage ab.
-2. **Raumhall der Stimme.** Aus Referenz-Take und gemessener Raum-Impulsantwort wird vorab berechnet, wie viel Hallenergie zu jedem Zeitpunkt des Songs in jedem Frequenzband zu erwarten ist. Das Plugin greift damit voraus und senkt diese Anteile ab.
+1. **Instrumental-Übersprechen** über PA und Monitore. Referenz ist die Instrumental-Spur selbst, sampleexakt. Ein adaptiver Filter lernt den Weg Lautsprecher → Halle → Mikro und zieht die Vorhersage ab.
+2. **Raumhall der Stimme.** Aus der Referenz-Vocal-Spur und der gemessenen Raum-Impulsantwort wird laufend berechnet, wie viel Hallenergie gerade in jedem Frequenzband zu erwarten ist. Diese Anteile werden abgesenkt.
 
 Der Audiopfad hat **0 Samples Latenz**. Alles, was Zeit braucht (Analyse, Filterberechnung), läuft im Seitenpfad und steuert einen minimalphasigen Filter.
 
@@ -13,23 +13,22 @@ Der Audiopfad hat **0 Samples Latenz**. Alles, was Zeit braucht (Analyse, Filter
 
 Die Oberfläche ist einem Studio-Magnettonschrank der 1960er nachempfunden: Hammerschlaglack mit Siebdruck (Name, Logo), Einschübe mit Schlitzschrauben, schwarze Einlagen hinter Blechausschnitten.
 - **Instrumente:** INPUT und OUTPUT als VU-Meter (0 VU = −18 dBFS, 300 ms), FEEDBACK zeigt die gemessene Absenkung des Playbacks (0–30 dB).
-- **STATUS-Lampen:** LINK = Sidechain verbunden · ROOM = Raumkorrektur läuft · FAULT = kein passendes Modell (Referenz-Take fehlt oder wird analysiert).
+- **STATUS-Lampen:** LINK = Instrumental kommt an · ROOM = Raumkorrektur läuft · FAULT = es fehlt etwas (Raum-IR oder Referenz-Vocal).
 - **VOCAL / INSTRUMENTAL:** Schieberegler, Wert im Zählwerk darunter. Doppelklick = 50.
 - **SYNC:** Alu-Drehknopf, senkrecht ziehen; Doppelklick = 0.
-- **MICROPHONE / PRESENCE:** Drehschalter. Auf die Beschriftung einer Stellung klicken, auf den Knopf klicken (schaltet weiter) oder Mausrad.
-- **DATA:** Referenz-Take laden; Raum-IR laden oder mit **MEASURE** direkt messen; Klartext-Status auf der Karte.
+- **MICROPHONE / PRESENCE / FUNCTION:** Drehschalter. Auf die Beschriftung einer Stellung klicken, auf den Knopf klicken (schaltet weiter) oder Mausrad.
+- **FUNCTION:** PROCESS = Hauptinstanz auf dem Mikrokanal · SEND INSTR. / SEND REF. = Sender auf einer Quellspur (siehe Einrichtung).
+- **DATA:** Auswahl der Spuren INSTRUMENTAL und REFERENCE VOCAL; Raum-IR laden oder mit **MEASURE** messen; Klartext-Status auf der Karte.
 
 | Regler | Wirkung |
 |---|---|
 | **VOCAL** 0–100 | 0 = aus. 50 = Hallschätzung einfach abgezogen, Absenkung höchstens −12 dB. 100 = doppelt abgezogen, bis −24 dB. |
 | **INSTRUMENTAL** 0–100 | 0–50: Abzug der Playback-Vorhersage von 0 auf 100 %. 50–100: zusätzlich Unterdrückung des verbleibenden Rests bis −20 dB. |
-| **MIKROFON** PR 37 / KSM9 / KMS 105 | Sanfte Anpassung an die Kapsel, siehe unten. Umschalten wird über 30 ms überblendet. |
+| **MICROPHONE** NEUTRAL / PR 37 / KSM9 / KMS 105 | NEUTRAL (Standard) = keine Klangänderung. Sonst sanfte Anpassung an die Kapsel, siehe unten. Umschalten wird über 30 ms überblendet. |
 | **PRESENCE** | Glocke +2 dB bei 3 kHz, breit (Q 1,0). |
-| **SYNC** ±100 ms | Verschiebt den Referenz-Take gegen das Live-Signal. Startwert: minus Roundtrip-Latenz des Interfaces (z. B. −6 ms). Unkritisch: Die Simulation bleibt bei ±40 ms Versatz wirksam. |
+| **SYNC** ±100 ms | Verschiebt die Referenz-Vocal-Spur gegen den Live-Gesang. Startwert 0; nur nachstellen, wenn der Sänger deutlich vor oder hinter der Referenz liegt. Unkritisch: Die Simulation bleibt bei ±40 ms Versatz wirksam. |
 
-Bei VOCAL 0 / INSTRUMENTAL 0 ist die Entstörung bitgenau neutral; es wirkt dann nur noch die Klangstufe (Mikrofon, Presence).
-
-Kopfzeile: Sidechain verbunden · gemessene Playback-Absenkung · Raumkorrektur aktiv/wartet.
+Bei VOCAL 0 / INSTRUMENTAL 0 und MICROPHONE NEUTRAL ohne Presence läuft das Signal bitgenau unverändert durch.
 
 ## Mikrofon-Anpassung
 
@@ -45,14 +44,20 @@ Grundlage sind die Herstellerangaben und Testberichte. Die Hersteller veröffent
 
 ## Einrichtung
 
-**Routing (Logic/MainStage, sinngemäß in jeder DAW)**
-- Crystal Voice als Insert auf den Mikrokanal (mono).
-- Sidechain-Eingang auf die Instrumental-Spur bzw. den Playback-Bus setzen, also genau das Signal, das auch zur PA geht.
-- Der Transport muss laufen. Song-Position 0 entspricht Sample 0 des Referenz-Takes.
+**Spuren verbinden (Logic/MainStage, sinngemäß in jeder DAW)**
 
-**Referenz-Take**
-- Der nachzusingende Gesang als WAV/AIFF, ab Song-Position 0 gebounced, möglichst trocken (Studio/Kabine).
-- Wurde der Take in derselben Halle aufgenommen, enthält er schon Hall. Dann wird zu viel Hall erwartet: VOCAL niedriger fahren.
+Ein Plugin kann andere Spuren nicht selbst abgreifen, und Logic bietet pro Plugin nur einen Sidechain. Deshalb arbeitet Crystal Voice mit Sende-Instanzen:
+
+1. **Instrumental-Spur:** Crystal Voice als Insert, FUNCTION auf **SEND INSTR.**, OUTPUT **THRU** (die Spur klingt normal weiter).
+2. **Referenz-Vocal-Spur:** Crystal Voice als Insert, FUNCTION auf **SEND REF.**, OUTPUT **MUTE** – die Spur bleibt aktiv, ist aber nicht zu hören. (Die Spur nicht in der DAW stummschalten, sonst rechnet der Host sie evtl. nicht.)
+3. **Mikrokanal:** Crystal Voice als Insert, FUNCTION auf **PROCESS**. Unter DATA erscheinen die Sende-Spuren in den Menüs INSTRUMENTAL und REFERENCE VOCAL. **AUTO** (Standard) nimmt die erste passende Sende-Spur.
+4. Die Namen der Sende-Spuren übernimmt das Plugin vom Host, falls er sie liefert (VST3); sonst im Sender unter NAME eintragen (z. B. „Playback“, „Lead Guide“).
+
+Hinweise:
+- Gesendet wird nur bei **laufendem Transport**; abgeglichen wird über die Song-Position. Reihenfolge und Vorlauf, mit denen der Host die Spuren rechnet, spielen keine Rolle.
+- Alle Instanzen müssen im selben Format laufen (alle AU oder alle VST3) – der Austausch geschieht innerhalb des Plugin-Bausteins.
+- Ohne Sende-Instanz für das Instrumental nutzt AUTO weiterhin den **Host-Sidechain** des Plugins (wie bisher).
+- Die Referenz-Vocal-Spur sollte möglichst trocken sein (Studio/Kabine). Enthält sie schon Hall, wird zu viel Hall erwartet: VOCAL niedriger fahren.
 
 **Raum-IR messen – direkt im Plugin (MEASURE)**
 
@@ -70,12 +75,12 @@ Klirr des Lautsprechers stört nicht: Beim exponentiellen Sweep landen die Verze
 Alternativ lässt sich eine extern gemessene IR (z. B. Room EQ Wizard) als Mono-WAV über **LOAD** laden.
 
 **Soundcheck**
-- 10–20 s Instrumental über die PA laufen lassen, ohne Gesang. Dann hat der Playback-Filter den Raumweg gelernt. Danach führt er in jeder Gesangspause nach. Während gesungen wird, ist er eingefroren. Woher es weiß, wann gesungen wird: aus dem Referenz-Take, vorab.
-- Die Dateipfade werden im Projekt gespeichert. Den gelernten Filter speichert das Plugin nicht; er wird nach dem Laden in Sekunden neu gelernt.
+- 10–20 s Instrumental über die PA laufen lassen, ohne Gesang. Dann hat der Playback-Filter den Raumweg gelernt. Danach führt er in jeder Gesangspause nach. Während gesungen wird, ist er eingefroren. Woher es weiß, wann gesungen wird: aus der Referenz-Vocal-Spur.
+- Spurwahl und Pfad der Raum-IR werden im Projekt gespeichert. Den gelernten Filter speichert das Plugin nicht; er wird nach dem Laden in Sekunden neu gelernt.
 
 ## Messwerte (Simulation)
 
-Synthetische Halle mit T60 1,6 s, Stimmhall −10 dB unter Direktschall, PA-Übersprechen mit 12 ms Laufzeit. Die Raum-IR fürs Modell ist eine *andere* Messung mit gleicher Hüllkurve und anderer Feinstruktur (simuliert eine leicht andere Position). Der Referenz-Take ist 1 ms versetzt und hat einen anderen Pegel. Vollständige Ausgabe: `tests/sim_ergebnis.txt`.
+Synthetische Halle mit T60 1,6 s, Stimmhall −10 dB unter Direktschall, PA-Übersprechen mit 12 ms Laufzeit. Die Raum-IR fürs Modell ist eine *andere* Messung mit gleicher Hüllkurve und anderer Feinstruktur (simuliert eine leicht andere Position). Die Referenz-Vocal-Spur ist 1 ms versetzt und hat einen anderen Pegel. Vollständige Ausgabe: `tests/sim_ergebnis.txt`.
 
 | | Ergebnis |
 |---|---|
@@ -116,13 +121,13 @@ cmake --build build --config Release --target cv_sim && ./build/Release/cv_sim
 ```
 core/            DSP-Kern, reines C++17, ohne JUCE
   Aec.*          Playback-Canceller: partitioniertes Frequenzbereichs-NLMS, 500 ms, ohne Latenz
-  VocalModel.*   Offline-Analyse: Referenz-Take ⊛ Raum-IR → erwartete Hallenergie je Hop/Band,
-                 Gesangs-Aktivitätskarte
+  RoomModel.*    Raummodell aus der IR: späte Energie je Verzögerung und Band
+  StreamHub.h    Signalaustausch zwischen Instanzen (Sender → Hauptinstanz), über die Song-Position
   Engine.*       Signalfluss, Gain-Berechnung, minimalphasiger FIR (Cepstrum), Überblendung
   IrMeasure.*    Raummessung: Sweep erzeugen, Dekonvolution, Kürzen, T60/SNR
   ToneStage.h    Mikrofon-Anpassung und Presence (Biquads, Überblendung beim Umschalten)
   Bands.h/Fft.h  ERB-Bänder, FFT
-Source/          JUCE-Plugin: Processor (Busse, Sidechain, Transport, Datei-Laden im Hintergrund), Editor
+Source/          JUCE-Plugin: Processor (Betriebsarten, Spurwahl, Sidechain, Messung), Editor
 tests/sim.cpp            Simulation mit Messung in dB
 tests/plugin_smoke.cpp   Host-Simulation (cmake -DCV_BUILD_SMOKE=ON)
 tests/editor_snapshot.cpp  rendert die Oberfläche als PNG (gleiche Option)
@@ -133,7 +138,7 @@ Resources/       Schrift Barlow Condensed (SIL Open Font License, Text in Resour
 
 - **Wedges:** Kommt die eigene Stimme über Bodenmonitore zurück, ist das ein Feedback-Pfad. Den behandelt Crystal Voice nicht. In-Ear ist unkritisch.
 - **Playback-Nachhall jenseits von 500 ms** wird nicht abgezogen. Der Rest wird von der Restunterdrückung (INSTRUMENTAL > 50) erfasst.
-- **Test mit echtem Material:** Aufnahme vom Bühnenmikro mit laufendem Playback (mit Gesang und mit Pausen), dazu Instrumental, Referenz-Take und IR. Damit lassen sich die Kennlinien der Regler auf die reale Halle abstimmen.
+- **Test mit echtem Material:** Aufnahme vom Bühnenmikro mit laufendem Playback (mit Gesang und mit Pausen), dazu Instrumental, Referenz-Vocal und IR. Damit lassen sich die Kennlinien der Regler auf die reale Halle abstimmen.
 - Option: Gelernten Playback-Filter im Projekt speichern, damit er direkt ab dem ersten Takt greift.
 
 ## Mac-Version ohne eigenes Xcode (GitHub)

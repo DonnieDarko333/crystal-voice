@@ -13,7 +13,7 @@ option(CV_BUILD_SIM "Simulation/Messung bauen" ON)
 option(CV_BUILD_SMOKE "Rauchtest des Plugins (Host-Simulation) bauen" OFF)
 
 # DSP-Kern ohne JUCE-Abhängigkeit
-add_library(cv_core STATIC core/Aec.cpp core/Engine.cpp core/VocalModel.cpp core/IrMeasure.cpp)
+add_library(cv_core STATIC core/Aec.cpp core/Engine.cpp core/RoomModel.cpp core/IrMeasure.cpp)
 target_include_directories(cv_core PUBLIC core)
 set_target_properties(cv_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

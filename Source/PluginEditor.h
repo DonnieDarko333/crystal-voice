@@ -19,6 +19,7 @@ public:
     RotarySwitch(juce::StringArray labels, juce::Array<float> anglesDeg);
     void setIndex(int i);
     int getIndex() const { return index; }
+    void setCentreRatio(float r) { centreRatio = r; repaint(); }
     std::function<void(int)> onChange;
 
     void paint(juce::Graphics&) override;
@@ -32,6 +33,7 @@ private:
     juce::StringArray labels;
     juce::Array<float> angles;
     int index = 0;
+    float centreRatio = 0.60f;
 };
 
 struct Look : juce::LookAndFeel_V4 {
@@ -43,6 +45,7 @@ struct Look : juce::LookAndFeel_V4 {
     int getSliderThumbRadius(juce::Slider&) override { return 13; }
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool over, bool down) override;
     void drawButtonText(juce::Graphics&, juce::TextButton&, bool over, bool down) override;
+    juce::Font getPopupMenuFont() override;
     juce::SharedResourcePointer<Assets> assets;
 };
 
@@ -59,20 +62,26 @@ public:
 
 private:
     void timerCallback() override;
-    void chooseFile(bool reference);
+    void chooseIrFile();
+    void showSourceMenu(bool instrumental);
+    void applyMode(int mode);
 
     cvui::Look look;
     juce::SharedResourcePointer<cvui::Assets> assets;
     CrystalVoiceProcessor& proc;
 
     juce::Slider vocal, instr, sync;
-    cvui::RotarySwitch micSwitch { { "HEIL\nPR 37", "SHURE\nKSM9", "NEUMANN\nKMS 105" }, { -52.0f, 0.0f, 52.0f } };
+    cvui::RotarySwitch micSwitch { { "NEUTRAL", "HEIL\nPR 37", "SHURE\nKSM9", "NEUMANN\nKMS 105" },
+                                   { -75.0f, -25.0f, 25.0f, 75.0f } };
     cvui::RotarySwitch presSwitch { { "OFF", "ON" }, { -45.0f, 45.0f } };
-    juce::TextButton loadRef { "LOAD" }, loadIr { "LOAD" }, measure { "MEASURE" };
-    juce::Label status;
+    cvui::RotarySwitch modeSwitch { { "PROCESS", "SEND\nINSTR.", "SEND\nREF." }, { -50.0f, 0.0f, 50.0f } };
+    cvui::RotarySwitch outSwitch { { "THRU", "MUTE" }, { -45.0f, 45.0f } };
+    juce::TextButton instrSel, refSel, loadIr { "LOAD" }, measure { "MEASURE" };
+    juce::Label status, nameField;
+    int shownMode = -1;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> aVocal, aInstr, aSync;
-    std::unique_ptr<juce::ParameterAttachment> aMic, aPres;
+    std::unique_ptr<juce::ParameterAttachment> aMic, aPres, aMode, aMute;
     std::unique_ptr<juce::FileChooser> chooser;
 
     // Zeigerstellungen 0..1 (mit Trägheit) und Lampen

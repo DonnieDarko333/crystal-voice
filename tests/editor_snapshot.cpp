@@ -14,7 +14,15 @@ int main(int argc, char** argv) {
     p.params.getParameter("instrumental")->setValueNotifyingHost(0.85f);
     p.params.getParameter("presence")->setValueNotifyingHost(1.0f);
     p.params.getParameter("sync")->setValueNotifyingHost(p.params.getParameter("sync")->convertTo0to1(-6.5f));
-    if (argc > 2) p.params.getParameter("mic")->setValueNotifyingHost(1.0f);
+    const juce::String variant = argc > 2 ? juce::String(argv[2]) : juce::String();
+    if (variant == "send") {
+        auto* m = p.params.getParameter("mode");
+        m->setValueNotifyingHost(m->convertTo0to1(1.0f));
+        p.setSendName("Playback");
+    } else {
+        auto* m = p.params.getParameter("mic");
+        m->setValueNotifyingHost(m->convertTo0to1(variant == "alt" ? 3.0f : 1.0f));
+    }
 
     // Mikro = Stimme + verzögertes Playback, Sidechain = Playback
     std::mt19937 rng(3);

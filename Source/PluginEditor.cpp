@@ -5,7 +5,7 @@
 
 namespace cvui {
 
-static constexpr int W = 940, H = 640;
+static constexpr int W = 940, H = 710;
 
 // Lack und Bauteile
 const juce::Colour cabinet(0xff9aa6ae), panelCol(0xffaeb9c1), engrave(0xff22262a);
@@ -14,13 +14,14 @@ const juce::Colour chromeHi(0xfff6f6f2), chromeMid(0xffc3c5c4), chromeLo(0xff707
 const juce::Colour face(0xfff5f2ea), needleCol(0xff141414), redZone(0xffc8261c);
 
 namespace L {
-const juce::Rectangle<float> panelA(16, 88, 908, 182), panelB(16, 276, 908, 244), panelC(16, 526, 908, 100);
+const juce::Rectangle<float> panelA(16, 88, 908, 182), panelB(16, 276, 908, 244), panelC(16, 526, 908, 170);
 const juce::Rectangle<float> logo(66, 110, 128, 104);
 const juce::Rectangle<float> meters(222, 102, 480, 152), lamps(726, 102, 134, 152);
 const juce::Rectangle<float> modVocal(66, 290, 112, 216), modInstr(192, 290, 112, 216), modSync(326, 290, 164, 216),
-    modMic(512, 290, 196, 216), modPres(730, 290, 130, 216);
-const juce::Rectangle<float> modData(66, 538, 794, 76);
-const juce::Rectangle<float> card(470, 556, 286, 42);
+    modMic(500, 290, 220, 216), modPres(736, 290, 124, 216);
+const juce::Rectangle<float> modFunc(66, 538, 196, 146), modData(278, 538, 582, 146);
+const juce::Rectangle<float> card(294, 618, 550, 54);
+const juce::Rectangle<float> modSend(66, 290, 794, 216), nameCard(110, 392, 380, 44);
 }
 
 // ---------------------------------------------------------------------------------- Assets
@@ -336,7 +337,7 @@ RotarySwitch::RotarySwitch(juce::StringArray l, juce::Array<float> a) : labels(s
 }
 
 juce::Point<float> RotarySwitch::centre() const {
-    return { (float) getWidth() * 0.5f, (float) getHeight() * 0.60f };
+    return { (float) getWidth() * 0.5f, (float) getHeight() * centreRatio };
 }
 
 void RotarySwitch::setIndex(int i) {
@@ -381,7 +382,9 @@ void RotarySwitch::paint(juce::Graphics& g) {
         g.fillEllipse(dot.x - 2.5f, dot.y - 2.5f, 5.0f, 5.0f);
         const bool twoLines = labels[i].contains("\n");
         const float lr = twoLines ? 66.0f : 60.0f;
-        const juce::Point<float> lp(c.x + lr * std::sin(an), c.y - lr * std::cos(an) - (twoLines ? 4.0f : 0.0f));
+        // fast waagerechte Stellungen weiter nach außen, damit Text und Rastpunkt frei bleiben
+        const float out = 20.0f * std::pow(std::abs(std::sin(an)), 4.0f) * (an < 0.0f ? -1.0f : 1.0f);
+        const juce::Point<float> lp(c.x + lr * std::sin(an) + out, c.y - lr * std::cos(an) - (twoLines ? 4.0f : 0.0f));
         const bool on = i == index;
         g.setColour(on ? print : print.withAlpha(0.55f));
         g.setFont(assets->font(13.0f, on));
@@ -396,6 +399,15 @@ void RotarySwitch::paint(juce::Graphics& g) {
 Look::Look() {
     setColour(juce::TextButton::textColourOffId, print);
     setColour(juce::TextButton::textColourOnId, print);
+    setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff161616));
+    setColour(juce::PopupMenu::textColourId, print);
+    setColour(juce::PopupMenu::headerTextColourId, print.withAlpha(0.6f));
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff6a4a12));
+    setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
+    setColour(juce::Label::textWhenEditingColourId, juce::Colour(0xff1d1d1b));
+    setColour(juce::TextEditor::highlightColourId, juce::Colour(0x40a07020));
+    setColour(juce::TextEditor::textColourId, juce::Colour(0xff1d1d1b));
+    setColour(juce::CaretComponent::caretColourId, juce::Colour(0xff1d1d1b));
 }
 
 void Look::drawLinearSlider(juce::Graphics& g, int, int, int, int, float pos, float, float,
@@ -495,14 +507,35 @@ void Look::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::
 }
 
 void Look::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool, bool down) {
-    text(g, assets->font(14.0f), b.getButtonText(), b.getLocalBounds().toFloat().translated(0.0f, down ? 1.0f : 0.0f), print);
+    auto r = b.getLocalBounds().toFloat().translated(0.0f, down ? 1.0f : 0.0f);
+    const auto col = b.isEnabled() ? print : print.withAlpha(0.4f);
+    if (b.getProperties().contains("selector")) {
+        // Auswahltaste: Text links, kleines Dreieck rechts
+        auto tri = r.removeFromRight(24.0f).withSizeKeepingCentre(9.0f, 6.0f);
+        juce::Path p;
+        p.addTriangle(tri.getX(), tri.getY(), tri.getRight(), tri.getY(), tri.getCentreX(), tri.getBottom());
+        g.setColour(col);
+        g.fillPath(p);
+        g.setFont(assets->font(13.0f));
+        g.drawFittedText(b.getButtonText(), r.reduced(10.0f, 0.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.75f);
+        return;
+    }
+    text(g, assets->font(14.0f), b.getButtonText(), r, col);
 }
+
+juce::Font Look::getPopupMenuFont() { return assets->font(15.0f, false); }
 
 } // namespace cvui
 
 // ======================================================================================== Editor
 
 using namespace cvui;
+
+// Großschreibung inkl. Umlaute (unabhängig von der Systemumgebung)
+static juce::String upper(const juce::String& t) {
+    return t.toUpperCase().replace(juce::String::fromUTF8("ä"), juce::String::fromUTF8("Ä"))
+        .replace(juce::String::fromUTF8("ö"), juce::String::fromUTF8("Ö")).replace(juce::String::fromUTF8("ü"), juce::String::fromUTF8("Ü"));
+}
 
 static juce::String padded(double v, int intDigits, bool withSign, bool withDecimal) {
     const double av = std::abs(v);
@@ -547,9 +580,36 @@ CrystalVoiceEditor::CrystalVoiceEditor(CrystalVoiceProcessor& p) : AudioProcesso
     aPres->sendInitialUpdate();
     addAndMakeVisible(presSwitch);
 
-    loadRef.onClick = [this] { chooseFile(true); };
-    loadIr.onClick = [this] { chooseFile(false); };
-    addAndMakeVisible(loadRef);
+    // Betriebsart und Sender
+    aMode = std::make_unique<juce::ParameterAttachment>(*p.params.getParameter("mode"),
+                                                        [this](float v) { modeSwitch.setIndex(juce::roundToInt(v)); });
+    modeSwitch.onChange = [this](int i) { aMode->setValueAsCompleteGesture((float) i); };
+    aMode->sendInitialUpdate();
+    addAndMakeVisible(modeSwitch);
+
+    aMute = std::make_unique<juce::ParameterAttachment>(*p.params.getParameter("sendMute"),
+                                                        [this](float v) { outSwitch.setIndex(v > 0.5f ? 1 : 0); });
+    outSwitch.onChange = [this](int i) { aMute->setValueAsCompleteGesture(i == 1 ? 1.0f : 0.0f); };
+    aMute->sendInitialUpdate();
+    addChildComponent(outSwitch);
+
+    nameField.setFont(assets->font(20.0f));
+    nameField.setColour(juce::Label::textColourId, juce::Colour(0xff1d1d1b));
+    nameField.setJustificationType(juce::Justification::centredLeft);
+    nameField.setEditable(true, true, false);
+    nameField.setTooltip(juce::String::fromUTF8("Unter diesem Namen erscheint die Spur in der Hauptinstanz. Leer = Spurname."));
+    nameField.onTextChange = [this] { proc.setSendName(nameField.getText()); };
+    addChildComponent(nameField);
+
+    // Quellenwahl
+    for (auto* b : { &instrSel, &refSel }) {
+        b->getProperties().set("selector", true);
+        addAndMakeVisible(b);
+    }
+    instrSel.onClick = [this] { showSourceMenu(true); };
+    refSel.onClick = [this] { showSourceMenu(false); };
+
+    loadIr.onClick = [this] { chooseIrFile(); };
     addAndMakeVisible(loadIr);
     measure.setTooltip(juce::String::fromUTF8("Gibt einen 6-s-Sweep auf dem Ausgang dieses Kanals aus und misst den Raum. Nur bei gestopptem Transport."));
     measure.onClick = [this] {
@@ -558,10 +618,10 @@ CrystalVoiceEditor::CrystalVoiceEditor(CrystalVoiceProcessor& p) : AudioProcesso
     };
     addAndMakeVisible(measure);
 
-    status.setFont(assets->font(15.0f, false));
+    status.setFont(assets->font(14.0f, false));
     status.setColour(juce::Label::textColourId, juce::Colour(0xff1d1d1b));
     status.setJustificationType(juce::Justification::centredLeft);
-    status.setMinimumHorizontalScale(0.7f);
+    status.setMinimumHorizontalScale(0.8f);
     status.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(status);
 
@@ -575,16 +635,51 @@ CrystalVoiceEditor::~CrystalVoiceEditor() {
     setLookAndFeel(nullptr);
 }
 
-void CrystalVoiceEditor::chooseFile(bool reference) {
-    chooser = std::make_unique<juce::FileChooser>(reference ? "Referenz-Take (Gesang, trocken)" : "Raum-Impulsantwort",
-                                                  juce::File(), "*.wav;*.aif;*.aiff;*.flac");
+void CrystalVoiceEditor::chooseIrFile() {
+    chooser = std::make_unique<juce::FileChooser>("Raum-Impulsantwort", juce::File(), "*.wav;*.aif;*.aiff;*.flac");
     chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                         [this, reference](const juce::FileChooser& fc) {
+                         [this](const juce::FileChooser& fc) {
                              const auto f = fc.getResult();
-                             if (!f.existsAsFile()) return;
-                             if (reference) proc.loadReference(f);
-                             else proc.loadRoomIr(f);
+                             if (f.existsAsFile()) proc.loadRoomIr(f);
                          });
+}
+
+void CrystalVoiceEditor::showSourceMenu(bool instrumental) {
+    const auto opts = proc.getSourceOptions(instrumental);
+    const auto cur = proc.getSource(instrumental);
+    juce::PopupMenu m;
+    m.addSectionHeader(instrumental ? "INSTRUMENTAL" : "REFERENCE VOCAL");
+    int id = 1;
+    bool sendsShown = false;
+    for (auto& o : opts) {
+        if (o.id.startsWith("SEND:") && !sendsShown) {
+            m.addSeparator();
+            m.addSectionHeader(juce::String::fromUTF8("SPUREN MIT CRYSTAL VOICE IM SEND-MODUS"));
+            sendsShown = true;
+        }
+        m.addItem(id++, o.label, true, o.id == cur);
+    }
+    if (!sendsShown) {
+        m.addSeparator();
+        m.addItem(-1, juce::String::fromUTF8("Keine Sende-Spur gefunden – Crystal Voice auf der Spur"), false, false);
+        m.addItem(-1, juce::String::fromUTF8("einsetzen und FUNCTION auf SEND stellen"), false, false);
+    }
+    auto& target = instrumental ? instrSel : refSel;
+    m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&target).withMinimumWidth(target.getWidth()),
+                    [this, opts, instrumental](int r) {
+                        if (r >= 1 && r <= (int) opts.size()) proc.setSource(instrumental, opts[(size_t) r - 1].id);
+                    });
+}
+
+void CrystalVoiceEditor::applyMode(int mode) {
+    shownMode = mode;
+    const bool send = mode != CrystalVoiceProcessor::Process;
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &vocal, &instr, &sync, &micSwitch, &presSwitch,
+                                                                         &instrSel, &refSel, &loadIr, &measure })
+        c->setVisible(!send);
+    outSwitch.setVisible(send);
+    nameField.setVisible(send);
+    repaint();
 }
 
 // VU-Skala: 0 VU = −18 dBFS, Zeigerausschlag proportional zur Spannung
@@ -614,10 +709,24 @@ void CrystalVoiceEditor::timerCallback() {
     } else if (refusedTicks > 0) {
         --refusedTicks;
         st = refusedNote;
+    } else if (proc.getMode() != P::Process) {
+        const bool instrRole = proc.getMode() == P::SendInstrumental;
+        st = juce::String::fromUTF8("Sendet als ") + (instrRole ? "Instrumental" : "Referenz-Vocal")
+             + juce::String::fromUTF8(" „") + proc.getSendName() + juce::String::fromUTF8("“\n")
+             + juce::String::fromUTF8("In der Hauptinstanz auf dem Mikrokanal anwählbar. Gesendet wird nur bei laufendem Transport.");
     } else {
-        st = proc.getStatus();
+        st = juce::String::fromUTF8("Instr.: ") + proc.describeSource(true)
+             + (proc.isInstrumentalFlowing() ? juce::String() : juce::String::fromUTF8(" (kein Signal)"))
+             + juce::String::fromUTF8("   ·   Referenz: ") + proc.describeSource(false)
+             + (proc.isReferenceFlowing() ? juce::String() : juce::String::fromUTF8(" (kein Signal)"))
+             + "\n" + proc.getStatus();
     }
-    status.setText(st.toUpperCase(), juce::dontSendNotification);
+    status.setText(upper(st), juce::dontSendNotification);
+
+    if (proc.getMode() != shownMode) applyMode(proc.getMode());
+    instrSel.setButtonText(upper(proc.describeSource(true)));
+    refSel.setButtonText(upper(proc.describeSource(false)));
+    if (!nameField.isBeingEdited()) nameField.setText(proc.getSendName(), juce::dontSendNotification);
     measure.setButtonText(ms == P::Running || ms == P::Requested ? "STOP" : "MEASURE");
     measure.setEnabled(ms != P::Recorded && ms != P::Analyzing);
 
@@ -635,9 +744,10 @@ void CrystalVoiceEditor::timerCallback() {
 
     const bool measuring = ms != P::Idle;
     blinkTicks = measuring ? blinkTicks + 1 : 0;
-    const bool link = proc.isSidechainConnected(),
+    const bool sendMode = proc.getMode() != P::Process;
+    const bool link = sendMode ? proc.getInputMs() > 1e-9f : proc.isInstrumentalFlowing(),
                room = measuring ? (blinkTicks / 8) % 2 == 0 : proc.isVocalStageActive(),
-               fault = !proc.isModelAccepted();
+               fault = !sendMode && (!proc.isModelAccepted() || !proc.isReferenceFlowing());
     if (link != lampLink || room != lampRoom || fault != lampFault) {
         lampLink = link; lampRoom = room; lampFault = fault;
         repaint(L::lamps.expanded(20).toNearestInt());
@@ -729,10 +839,36 @@ void CrystalVoiceEditor::paint(juce::Graphics& g) {
             lamp(g, { cx, L::lamps.getY() + 72.0f }, 9.0f, c[i], on[i]);
             text(g, a.font(11.5f), n[i], { cx - 22.0f, L::lamps.getY() + 96.0f, 44.0f, 13.0f }, print);
         }
-        text(g, a.font(10.5f, false), juce::String::fromUTF8("SIDECHAIN  ·  ROOM  ·  MODEL"),
+        text(g, a.font(10.5f, false), juce::String::fromUTF8("SIGNAL  ·  ACTIVE  ·  MISSING"),
              { L::lamps.getX(), L::lamps.getBottom() - 30.0f, L::lamps.getWidth(), 12.0f }, print.withAlpha(0.5f));
     }
 
+    // Sender-Ansicht statt der Bedienmodule
+    if (shownMode != CrystalVoiceProcessor::Process) {
+        module(g, L::modSend);
+        const bool instrRole = shownMode == CrystalVoiceProcessor::SendInstrumental;
+        text(g, a.font(14.0f), juce::String::fromUTF8(instrRole ? "SEND  ·  INSTRUMENTAL" : "SEND  ·  REFERENCE VOCAL"),
+             { 110.0f, 298.0f, 420.0f, 22.0f }, print, juce::Justification::centredLeft);
+        text(g, a.font(13.0f, false),
+             juce::String::fromUTF8("DIESE INSTANZ SCHICKT DAS SIGNAL IHRER SPUR AN CRYSTAL VOICE AUF DEM MIKROKANAL."),
+             { 110.0f, 330.0f, 420.0f, 16.0f }, print.withAlpha(0.8f), juce::Justification::centredLeft);
+        text(g, a.font(12.0f), "NAME", { 110.0f, 372.0f, 200.0f, 14.0f }, print, juce::Justification::centredLeft);
+        {
+            const auto c = L::nameCard;
+            g.setColour(juce::Colour(0xff3a3a3a));
+            g.fillRoundedRectangle(c.expanded(3.0f), 3.0f);
+            juce::ColourGradient cg(juce::Colour(0xffefe9d4), 0.0f, c.getY(), juce::Colour(0xffddd5bd), 0.0f, c.getBottom(), false);
+            g.setGradientFill(cg);
+            g.fillRect(c);
+        }
+        text(g, a.font(11.5f, false), juce::String::fromUTF8("KLICKEN ZUM ÄNDERN  ·  LEER = SPURNAME"),
+             { 110.0f, 444.0f, 380.0f, 14.0f }, print.withAlpha(0.6f), juce::Justification::centredLeft);
+        g.setColour(print.withAlpha(0.25f));
+        g.fillRect(560.0f, 316.0f, 1.0f, 170.0f);
+        text(g, a.font(14.0f), "OUTPUT", { 580.0f, 300.0f, 260.0f, 22.0f }, print);
+        text(g, a.font(11.5f, false), juce::String::fromUTF8("MUTE = SPUR STUMM, SIGNAL WIRD TROTZDEM GESENDET"),
+             { 580.0f, 470.0f, 260.0f, 14.0f }, print.withAlpha(0.7f));
+    } else {
     // Bedienmodule
     for (auto r : { L::modVocal, L::modInstr, L::modSync, L::modMic, L::modPres }) module(g, r);
     text(g, a.font(14.0f), "VOCAL", L::modVocal.withHeight(22.0f).translated(0.0f, 8.0f), print);
@@ -768,14 +904,24 @@ void CrystalVoiceEditor::paint(juce::Graphics& g) {
          print.withAlpha(0.7f));
     text(g, a.font(11.5f, false), "CAPSULE COMPENSATION", { L::modMic.getX(), L::modMic.getBottom() - 32.0f, L::modMic.getWidth(), 14.0f },
          print.withAlpha(0.7f));
+    }
+
+    // Betriebsart
+    module(g, L::modFunc);
+    text(g, a.font(14.0f), "FUNCTION", L::modFunc.withHeight(22.0f).translated(0.0f, 8.0f), print);
 
     // Datenmodul
     module(g, L::modData);
-    text(g, a.font(12.0f), "REFERENCE TAKE", { 84.0f, 544.0f, 112.0f, 14.0f }, print);
-    text(g, a.font(12.0f), "ROOM IR", { 212.0f, 544.0f, 240.0f, 14.0f }, print);
-    g.setColour(print.withAlpha(0.6f));
-    g.fillRect(212.0f, 551.0f, 70.0f, 1.0f);
-    g.fillRect(382.0f, 551.0f, 70.0f, 1.0f);
+    if (shownMode == CrystalVoiceProcessor::Process) {
+        text(g, a.font(12.0f), "INSTRUMENTAL", { 294.0f, 548.0f, 160.0f, 14.0f }, print);
+        text(g, a.font(12.0f), "REFERENCE VOCAL", { 464.0f, 548.0f, 160.0f, 14.0f }, print);
+        text(g, a.font(12.0f), "ROOM IR", { 640.0f, 548.0f, 204.0f, 14.0f }, print);
+        g.setColour(print.withAlpha(0.6f));
+        g.fillRect(640.0f, 555.0f, 66.0f, 1.0f);
+        g.fillRect(778.0f, 555.0f, 66.0f, 1.0f);
+    } else {
+        text(g, a.font(12.0f), "STATUS", { 294.0f, 548.0f, 550.0f, 14.0f }, print);
+    }
     {
         const auto c = L::card;
         g.setColour(juce::Colour(0xff3a3a3a));
@@ -783,23 +929,6 @@ void CrystalVoiceEditor::paint(juce::Graphics& g) {
         juce::ColourGradient cg(juce::Colour(0xffefe9d4), 0.0f, c.getY(), juce::Colour(0xffddd5bd), 0.0f, c.getBottom(), false);
         g.setGradientFill(cg);
         g.fillRect(c);
-    }
-    // Sidechain-Buchse aus braunem Bakelit
-    {
-        const juce::Point<float> sc(L::modData.getRight() - 64.0f, L::modData.getCentreY() + 6.0f);
-        text(g, a.font(12.0f), "SC IN", { sc.x - 30.0f, 544.0f, 60.0f, 14.0f }, print);
-        const juce::Rectangle<float> o(sc.x - 26.0f, sc.y - 13.0f, 52.0f, 26.0f);
-        juce::ColourGradient rg(chromeHi, 0.0f, o.getY(), chromeLo, 0.0f, o.getBottom(), false);
-        g.setGradientFill(rg);
-        g.fillRoundedRectangle(o, 13.0f);
-        const auto in = o.reduced(3.0f);
-        juce::ColourGradient bg(juce::Colour(0xff6a2e22), 0.0f, in.getY(), juce::Colour(0xff35140e), 0.0f, in.getBottom(), false);
-        g.setGradientFill(bg);
-        g.fillRoundedRectangle(in, 10.0f);
-        g.setColour(juce::Colour(0xff0a0303));
-        g.fillRoundedRectangle(sc.x - 13.0f, sc.y - 4.5f, 3.5f, 9.0f, 1.5f);
-        g.fillRoundedRectangle(sc.x - 1.75f, sc.y - 6.0f, 3.5f, 12.0f, 1.5f);
-        g.fillRoundedRectangle(sc.x + 9.5f, sc.y - 4.5f, 3.5f, 9.0f, 1.5f);
     }
 }
 
@@ -812,12 +941,14 @@ void CrystalVoiceEditor::paintOverChildren(juce::Graphics& g) {
         g.setGradientFill(lg);
         g.fillAll();
     }
-    // Glasreflex über der Statuskarte
-    const auto c = L::card;
-    juce::ColourGradient gl(juce::Colours::white.withAlpha(0.25f), 0.0f, c.getY(), juce::Colours::transparentWhite, 0.0f,
-                            c.getCentreY(), false);
-    g.setGradientFill(gl);
-    g.fillRect(c);
+    // Glasreflex über den Anzeigekarten
+    for (auto c : { L::card, L::nameCard }) {
+        if (c == L::nameCard && shownMode == CrystalVoiceProcessor::Process) continue;
+        juce::ColourGradient gl(juce::Colours::white.withAlpha(0.25f), 0.0f, c.getY(), juce::Colours::transparentWhite, 0.0f,
+                                c.getCentreY(), false);
+        g.setGradientFill(gl);
+        g.fillRect(c);
+    }
 }
 
 void CrystalVoiceEditor::resized() {
@@ -826,8 +957,13 @@ void CrystalVoiceEditor::resized() {
     sync.setBounds((int) L::modSync.getCentreX() - 36, (int) L::modSync.getY() + 68, 72, 72);
     micSwitch.setBounds(L::modMic.toNearestInt().withTrimmedTop(26).withTrimmedBottom(44));
     presSwitch.setBounds(L::modPres.toNearestInt().withTrimmedTop(26).withTrimmedBottom(44));
-    loadRef.setBounds(84, 562, 112, 38);
-    loadIr.setBounds(212, 562, 112, 38);
-    measure.setBounds(336, 562, 116, 38);
+    modeSwitch.setBounds(L::modFunc.toNearestInt().withTrimmedTop(20));
+    modeSwitch.setCentreRatio(0.70f);
+    outSwitch.setBounds(580, 318, 260, 148);
+    nameField.setBounds(L::nameCard.toNearestInt().reduced(8, 2));
+    instrSel.setBounds(294, 566, 160, 36);
+    refSel.setBounds(464, 566, 160, 36);
+    loadIr.setBounds(640, 566, 92, 36);
+    measure.setBounds(738, 566, 106, 36);
     status.setBounds(L::card.toNearestInt().reduced(10, 2));
 }
